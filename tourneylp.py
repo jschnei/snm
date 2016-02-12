@@ -3,7 +3,7 @@ import numpy as np
 from pulp import *
 from scipy.linalg import eig 
 
-N = 4
+N = 6
 M = (N*(N-1))/2
 K = 3
 EDGES = []
@@ -66,8 +66,11 @@ def solveLP():
     LP = LpProblem("lp", LpMinimize)
 
     # Variables
-    probs = [[LpVariable("v{}_{}".format(str(x), str(y)), 0, 1) for y in xrange(N)] for x in xrange(1<<M)]
-    alpha = LpVariable("alpha", 0, 1)
+    probs = [[LpVariable("v{}_{}".format(str(x), str(y)), 0, 1) \
+        for y in xrange(N)] for x in xrange(1<<M)]
+    uppers = [[LpVariable("upper{}_{}".format(str(x), str(ind)), 0, 1) \
+        for ind, y in enumerate(combinations(range(N), K))] for x in xrange(1<<M)]
+    alpha = LpVariable("alpha", 0, 2)
 
     # Objective
     LP += alpha
@@ -78,11 +81,18 @@ def solveLP():
         if winner(x)>=0:
             LP += (probs[x][winner(x)] == 1)
             
-        for y in xrange(M):
-            nx = x^(1<<y)
-            LP += (alpha >= probs[x][EDGES[y][0]] + probs[x][EDGES[y][1]] - probs[nx][EDGES[y][0]] - probs[nx][EDGES[y][1]])
-        
-        
+        for ind, y in enumerate(combinations(range(N), K)):
+            flip_edges = [1<<edge_ind(z[0], z[1]) for z in combinations(y, 2)]
+            flip_bms = [sum(flips) for flips in all_subsets(flip_edges)]
+            
+            cur = lpSum([probs[x][z] for z in y])
+            for bm in flip_bms:
+                nx = x^bm
+                ncur = lpSum([probs[nx][z] for z in y])
+                LP += (uppers[x][ind] >= ncur)
+    
+            LP += (alpha >= uppers[x][ind]-cur)
+    
     GLPK().solve(LP)
 
     for v in LP.variables():
@@ -192,43 +202,3 @@ if __name__ == '__main__':
     solveLP()
     #check_rule(random_sing_elim)
     
-#def solveLP():
-    #LP = LpProblem("lp", LpMinimize)
-
-    ## Variables
-    #probs = [[LpVariable("v{}_{}".format(str(x), str(y)), 0, 1) \
-        #for y in xrange(N)] for x in xrange(1<<M)]
-    #uppers = [[LpVariable("upper{}_{}".format(str(x), str(ind)), 0, 1) \
-        #for ind, y in enumerate(combinations(range(N), K))] for x in xrange(1<<M)]
-    #lowers = [[LpVariable("lower{}_{}".format(str(x), str(ind)), 0, 1) \
-        #for ind, y in enumerate(combinations(range(N), K))] for x in xrange(1<<M)]
-    #alpha = LpVariable("alpha", 0, 1)
-
-    ## Objective
-    #LP += alpha
-
-    ## Constraints
-    #for x in xrange(1<<M):
-        #LP += (lpSum(probs[x]) == 1)
-        #if winner(x)>=0:
-            #LP += (probs[x][winner(x)] == 1)
-            
-        #for ind, y in enumerate(combinations(range(N), K)):
-            #bm = sum([1<<z for z in y])
-            #nx = x^bm
-            #partial = lpSum([probs[nx][z] - probs[x][z] for z in y])
-            #LP += (uppers[ind] >= partial)
-            #LP += (lowers[ind] <= partial)
-
-            
-        ##for y in xrange(M):
-            ##nx = x^(1<<y)
-            ##LP += (alpha >= probs[x][EDGES[y][0]] + probs[x][EDGES[y][1]] - probs[nx][EDGES[y][0]] - probs[nx][EDGES[y][1]])
-        
-        
-    #GLPK().solve(LP)
-
-    #for v in LP.variables():
-        #print v.name, "=", v.varValue
-        
-    #print "objective=", value(LP.objective)
