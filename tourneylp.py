@@ -5,7 +5,7 @@ from scipy.linalg import eig
 
 N = 5
 M = (N*(N-1))/2
-K = 2
+K = 3
 R = M - (K*(K-1))/2
 EDGES = []
 
@@ -302,6 +302,34 @@ def ariel(x):
 
     return freq
 
+# superrule is a rule, subrule is a table
+def subsample(x, superrule, subrule):
+    dist = superrule(x)
+#    print '[superrule]', x, dist
+
+    ans = [0. for _ in xrange(N)]
+    # sample 2*K-1 players from dist, and have them play according to subrule
+    for sample in itertools.product(range(N), repeat=2*K-1):
+        weight = 1.
+        for player in sample:
+            weight *= dist[player]
+
+#        print '---[sample]', sample, weight
+        ind = 0
+        x2 = 0
+        for i in xrange(2*K-1):
+            for j in xrange(i+1, 2*K-1):
+                if match_winner(x, sample[i], sample[j]) == sample[i]:
+                    x2 += 2**ind
+                ind += 1
+
+        ps = subrule[x2]
+#        print '---[subt]', x2, ps
+        for player, prob in zip(sample, ps):
+            ans[player] += weight*prob
+
+#    print '[ans]', ans
+    return ans
 
 # operations on rules
 
@@ -344,6 +372,29 @@ def table_rule(table):
         return table[x]
     return rule
 
+def save_rule(rule, fname):
+    f = open(fname, 'w')
+    ps = [rule(x) for x in xrange(1<<M)]
+    print 'Done computing ps'
+    f.write("{}\n".format(N))
+    for x in xrange(1<<M):
+        f.write("{}:{}\n".format(x, ' '.join(str(p) for p in ps[x])))
+    f.close()
+
+def load_rule(fname):
+    f = open(fname, 'r')
+    n = int(f.readline())
+    m = (n*(n-1))/2
+    table = [None for _ in xrange(1<<m)]
+
+    for i in xrange(1<<m):
+        x, ps = f.readline().split(':')
+        x = int(x)
+        ps = map(float, ps.split())
+        table[x] = ps
+
+    return table
+
 def check_rule(rule):
     ps = [rule(x) for x in xrange(1<<M)]
     print 'Done computing ps'
@@ -381,13 +432,9 @@ def check_rule(rule):
 
 
 if __name__ == '__main__':
-    #table = solveLP()
-    #table = symmetrize(table)
-    #check_rule(table_rule(table))
-    #check_rule(ariel)
-    maxalpha = 0.
-    for x in xrange(1<<M):
-        cur = half_snm_matt(x)
-        maxalpha = max(maxalpha, cur)
-
-    print 'Largest alpha:', maxalpha
+    #save_rule(table_rule(solveLP()), '3SNM5.rule')
+    subrule_table = load_rule('3SNM5.rule')
+    #check_rule(table_rule(subrule_table))
+    check_rule(lambda x: subsample(x, page_rank, subrule_table))
+    #check_rule(mult(page_rank, page_rank))
+    #check_rule(page_rank)
